@@ -1,0 +1,6 @@
+[package]
+name = "nbabel"
+version = "0.1.0"
+authors = ["s158542"]
+
+[dependencies]
