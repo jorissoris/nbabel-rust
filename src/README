@@ -1,0 +1,7 @@
+nbabel.rs
+Date: August 2016
+Author: Joris Dalderup (student @ TU/e, joris@jorisdalderuo.nl)
+
+Integration scheme: Predictor-corrector leapfrog
+Compiler: rustc 1.11.0 via cargo
+Operating system: Windows 8.1
