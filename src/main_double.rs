@@ -125,11 +125,13 @@ fn main() {
 		updateVelocities(&mut s);
 
 		t += dt;
-		k += 1; //Ugh, Rust doesn't support k++;
+		k += 1;
 
 		if k % 10 == 0 {
 			E = energies(&s);
 			println!("t = {}, E = {} {} {}, dE = {}", t, E[0], E[1], E[2], (E[0]-E0[0])/E0[0]);
 		}
 	}
+
+	// Dumping final snapshot
 }

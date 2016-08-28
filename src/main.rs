@@ -1,11 +1,29 @@
+/*
+ Written by Joris Dalderup (joris@jorisdalderup)
+ Compile with "cargo build --release"
+ */
+
 use std::io;
 use std::io::Read;
 use std::iter;
 use std::thread;
 use std::clone;
 use std::sync;
+use std::ops::Deref;
+use std::sync::mpsc;
 
 static dt: f64 = 1e-3;
+/*
+ How to choose a good thread count you ask? Well, how many virtual cores do(es)
+ you CPU(s) have? Multiply it by 1 to 2, and you have it. If your CPU hyperthreads
+ I would stay on the low end of that, if it doesn't you can go up to two.
+ Also see what works best for your situation.
+ Fair warning: having your processor at high use for long periods of time can
+ damage it.
+
+ Make sure that your  input file line count is devisable by THREAD_COUNT.
+ */
+static THREAD_COUNT: usize = 8;
 
 
 struct Star {
@@ -29,37 +47,48 @@ impl Clone for Star {
     }
 }
 
-fn acceleration(s: &mut Vec<Star>) -> Vec<Star>{
-	let mut handles = vec![];
+fn acceleration(s: &mut Vec<Star>) {
 	for si in 0..s.len() {
 		s[si].a = vec![0.0; 3];
 	}
-	let scc = s.clone();
-	let sc = sync::Arc::new(sync::Mutex::new(scc));
-	for si in 0..s.len() {
-		let sc = sc.clone();
-		handles.push(thread::spawn(move || {
-			let mut sc = sc.lock().unwrap();
-			let mut rij: Vec<f64> = vec![0.0; 3];
-			for sj in (si + 1)..sc.len() {
-				for i in 0..3 {
-					rij[i] = sc[si].r[i] - sc[sj].r[i];
-				}
 
-				let RdotR: f64 = (rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]).sqrt();
-				let apre: f64 = 1.0/(RdotR.powi(3));
-				for i in 1..3 {
-					sc[si].a[i] -= sc[sj].m*apre*rij[i];
-					sc[sj].a[i] += sc[si].m*apre*rij[i];
+	let mut handles = vec![];
+    let (tx, rx): (mpsc::Sender<Vec<Vec<f64>>>, mpsc::Receiver<Vec<Vec<f64>>>) = mpsc::channel();
+
+	for thread_index in 0..THREAD_COUNT {
+		let tx = tx.clone();
+		let mut sc = s.clone();
+		handles.push(thread::spawn(move || {
+			let thread_start = sc.len() / THREAD_COUNT * thread_index;
+			let thread_end = sc.len() / THREAD_COUNT * (thread_index + 1);
+			let mut adiff: Vec<Vec<f64>> = vec![vec![0.0; 3]; sc.len()];
+			for si in thread_start..thread_end {
+				let mut rij: Vec<f64> = vec![0.0; 3];
+				for sj in (si + 1)..sc.len() {
+					for i in 0..3 {
+						rij[i] = sc[si].r[i] - sc[sj].r[i];
+					}
+
+					let RdotR: f64 = (rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]).sqrt();
+					let apre: f64 = 1.0/(RdotR.powi(3));
+					for i in 1..3 {
+						adiff[si][i] -= sc[sj].m*apre*rij[i];
+						adiff[sj][i] += sc[si].m*apre*rij[i];
+					}
 				}
 			}
+			tx.send(adiff.clone()).expect("Thread failure, RIP");
 		}));
+	}
 
-	}
-	for handle in handles {
-		handle.join();
-	}
-	return sc.into_inner().expect("Oh god, this isn't supposed to happen!!!!");
+	for iy in  0..THREAD_COUNT {
+        let ax = rx.recv().expect("RIP");
+		for si in 0..s.len() {
+			for i in 0..3 {
+				s[si].a[i] += ax[si][i];
+			}
+		}
+    }
 }
 
 fn updatePositions(s: &mut Vec<Star>) {
@@ -145,11 +174,11 @@ fn main() {
 	let E0: Vec<f64> = energies(&s);
 	println!("Energies: {} {} {}", E0[0], E0[1], E0[2]);
 
-	s = acceleration(&mut s);
+	acceleration(&mut s);
 
 	while t < tend {
 		updatePositions(&mut s);
-		s = acceleration(&mut s);
+		acceleration(&mut s);
 		updateVelocities(&mut s);
 
 		t += dt;
