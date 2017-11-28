@@ -1,6 +1,6 @@
 nbabel.rs
 Date: August 2016
-Author: Joris Dalderup (student @ TU/e, joris@jorisdalderup.nl)
+Author: Joris Dalderup (student @ TU/e)
 
 Integration scheme: Predictor-corrector leapfrog
 Compiler: rustc 1.11.0 via cargo
